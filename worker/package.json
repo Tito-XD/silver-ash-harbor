@@ -1,0 +1,17 @@
+{
+  "name": "silver-ash-harbor",
+  "version": "1.0.0",
+  "description": "Multi-brand price tracking and monitoring tool",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create price-db",
+    "db:init": "wrangler d1 execute price-db --file=../schema.sql",
+    "db:seed": "wrangler d1 execute price-db --file=../seed.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250624.0",
+    "wrangler": "^4.0.0"
+  }
+}

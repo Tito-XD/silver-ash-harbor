@@ -1,0 +1,23 @@
+name = "silver-ash-harbor"
+main = "src/index.ts"
+compatibility_date = "2025-06-24"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets - dashboard frontend
+[assets]
+directory = "../dashboard"
+binding = "ASSETS"
+
+# D1 Database for price storage
+[[d1_databases]]
+binding = "DB"
+database_name = "price-db"
+database_id = ""  # Fill after `wrangler d1 create price-db`
+
+# Cron trigger - crawl every 6 hours (user can adjust)
+[triggers]
+crons = ["0 */6 * * *"]
+
+[env.production]
+[env.production.triggers]
+crons = ["0 */6 * * *"]
