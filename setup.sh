@@ -45,10 +45,10 @@ echo ""
 
 # ── Step 4: Initialize database (schema + seed) ────────────
 echo -e "${GREEN}[4/5]${NC} 初始化数据库表结构..."
-npx wrangler d1 execute price-db --file=../schema.sql
+npx wrangler d1 execute price-db --remote --file=../schema.sql
 echo ""
 echo -e "${GREEN}[4/5]${NC} 写入品牌种子数据..."
-npx wrangler d1 execute price-db --file=../seed.sql
+npx wrangler d1 execute price-db --remote --file=../seed.sql
 echo ""
 
 # ── Step 5: Deploy Worker ──────────────────────────────────
