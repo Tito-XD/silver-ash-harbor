@@ -13,60 +13,61 @@ import { BrandConfig, ScrapedProduct, ScrapeResult } from './types';
  */
 const BRAND_STRATEGIES: Record<string, (html: string, brand: { id: number; name: string; website: string }) => ScrapedProduct[]> = {
   /**
-   * Fanatec — custom headless CMS.
+   * Fanatec — custom headless CMS (Next.js / SSR).
    * Product blocks have:
-   *   <a href="/us-en/p/...">Product Name</a>
-   *   Current price: €XXX.XX (possibly also Original price: €XXX.XX)
-   * We extract using the "Current price:" marker as anchor.
+   *   <div class="...collapse-product-block__item-title...">Product Name</div>
+   *   <span class="sr-only">Current price: $XX.XX</span>
+   *   <a href="https://www.fanatec.com/us/en/p/...">...</a>
    */
   fanatec: (html: string, brand) => {
     const products: ScrapedProduct[] = [];
     const seen = new Set<string>();
 
-    // Find all product links (href contains /p/)
-    const linkPattern = /<a[^>]*href="(\/[^"]*\/p\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-    const links: { url: string; name: string; index: number }[] = [];
+    // Find product names from title divs
+    const nameRe = /<div[^>]*class="[^"]*collapse-product-block__item-title[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+    const names: { name: string; idx: number }[] = [];
+    let nm: RegExpExecArray | null;
+    while ((nm = nameRe.exec(html)) !== null) {
+      const name = stripHtml(nm[1]).trim();
+      if (name.length >= 4 && !seen.has(name)) names.push({ name, idx: nm.index });
+    }
+
+    // Find product links (href contains /p/)
+    const linkRe = /<a[^>]*href="((?:https?:)?\/\/[^"]*\/p\/[^"]+)"[^>]*>/gi;
+    const links: { url: string; idx: number }[] = [];
     let lm: RegExpExecArray | null;
-    while ((lm = linkPattern.exec(html)) !== null) {
-      const name = stripHtml(lm[2]).trim();
-      if (name.length < 4 || seen.has(name)) continue;
-      links.push({ url: lm[1], name, index: lm.index });
-    }
+    while ((lm = linkRe.exec(html)) !== null) links.push({ url: lm[1], idx: lm.index });
 
-    // Find all "Current price:" occurrences
-    const pricePattern = /Current price:\s*([€$£])\s*([\d,]+\.?\d*)/gi;
-    const prices: { symbol: string; value: number; index: number }[] = [];
+    // Find "Current price:" in sr-only spans
+    const priceRe = /Current price:\s*([$€£])\s*([\d,]+\.?\d{2})/gi;
+    const prices: { sym: string; val: number; idx: number }[] = [];
     let pm: RegExpExecArray | null;
-    while ((pm = pricePattern.exec(html)) !== null) {
-      prices.push({ symbol: pm[1], value: parseFloat(pm[2].replace(/,/g, '')), index: pm.index });
+    while ((pm = priceRe.exec(html)) !== null) {
+      prices.push({ sym: pm[1], val: parseFloat(pm[2].replace(/,/g, '')), idx: pm.index });
     }
 
-    // Match prices to the nearest preceding product link
-    for (const price of prices) {
-      // Find the closest link before this price
+    // Match prices to closest preceding name
+    for (const p of prices) {
+      let bestName: typeof names[0] | null = null;
+      for (const n of names) {
+        if (n.idx < p.idx && (!bestName || n.idx > bestName.idx)) bestName = n;
+      }
+      if (!bestName || seen.has(bestName.name)) continue;
+
+      // Find closest link before this price
       let bestLink: typeof links[0] | null = null;
-      for (const link of links) {
-        if (link.index < price.index && (!bestLink || link.index > bestLink.index)) {
-          bestLink = link;
-        }
+      for (const l of links) {
+        if (l.idx < p.idx && (!bestLink || l.idx > bestLink.idx)) bestLink = l;
       }
-      if (bestLink && !seen.has(bestLink.name)) {
-        seen.add(bestLink.name);
-        const currency = price.symbol === '€' ? 'EUR' : price.symbol === '£' ? 'GBP' : 'USD';
-        products.push({
-          name: bestLink.name,
-          price: price.value,
-          currency,
-          url: bestLink.url.startsWith('http') ? bestLink.url : `https://fanatec.com${bestLink.url}`,
-        });
+
+      seen.add(bestName.name);
+      const cur = p.sym === '€' ? 'EUR' : p.sym === '£' ? 'GBP' : 'USD';
+      const prod: ScrapedProduct = { name: bestName.name, price: p.val, currency: cur };
+      if (bestLink) {
+        prod.url = bestLink.url.startsWith('http') ? bestLink.url : `https://www.fanatec.com${bestLink.url}`;
       }
+      products.push(prod);
     }
-
-    // Fallback: if Fanatec strategy yields nothing, try JSON-LD
-    if (products.length === 0) {
-      products.push(...extractJsonLdProducts(html, brand));
-    }
-
     return products;
   },
 

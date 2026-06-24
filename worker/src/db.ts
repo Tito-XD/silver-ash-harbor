@@ -21,7 +21,7 @@ export class PriceDB {
 
   async getBrands(): Promise<Brand[]> {
     const { results } = await this.db.prepare(
-      'SELECT * FROM brands WHERE active = 1 ORDER BY name'
+      'SELECT * FROM brands WHERE active = 1 ORDER BY CASE name WHEN \'Fanatec\' THEN 1 WHEN \'Simagic\' THEN 2 WHEN \'Logitech\' THEN 3 WHEN \'Simucube\' THEN 4 WHEN \'Asetek\' THEN 5 ELSE 6 END, name'
     ).all<Brand>();
     return results;
   }
@@ -120,7 +120,7 @@ export class PriceDB {
         FROM price_history
       ) ph ON p.id = ph.product_id AND ph.rn = 1
       WHERE p.current_price IS NOT NULL
-      ORDER BY p.brand_id, p.name
+      ORDER BY CASE (SELECT name FROM brands WHERE id = p.brand_id) WHEN 'Fanatec' THEN 1 WHEN 'Simagic' THEN 2 WHEN 'Logitech' THEN 3 WHEN 'Simucube' THEN 4 WHEN 'Asetek' THEN 5 ELSE 6 END, p.name
     `).all<ProductWithChange>();
 
     return results;
@@ -222,7 +222,7 @@ export class PriceDB {
       LEFT JOIN crawl_log cl ON b.id = cl.brand_id
       WHERE b.active = 1
       GROUP BY b.id, b.name
-      ORDER BY b.name
+      ORDER BY CASE b.name WHEN 'Fanatec' THEN 1 WHEN 'Simagic' THEN 2 WHEN 'Logitech' THEN 3 WHEN 'Simucube' THEN 4 WHEN 'Asetek' THEN 5 ELSE 6 END, b.name
     `).all<BrandSummary>();
 
     return {
