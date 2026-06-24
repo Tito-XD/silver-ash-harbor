@@ -390,6 +390,38 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Post-process: find URLs for products that don't have one.
+ */
+function enrichUrls(products: ScrapedProduct[], html: string): void {
+  const linkRe = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const links: { url: string; text: string }[] = [];
+  let lm: RegExpExecArray | null;
+  while ((lm = linkRe.exec(html)) !== null) {
+    const text = stripHtml(lm[2]).trim();
+    if (text.length >= 4) links.push({ url: lm[1], text });
+  }
+
+  for (const p of products) {
+    if (p.url) continue;
+    const pn = p.name.toLowerCase();
+    for (const l of links) {
+      const lt = l.text.toLowerCase();
+      if (pn.includes(lt) || lt.includes(pn) || charSimilarity(pn, lt) > 0.7) {
+        p.url = l.url.startsWith('http') ? l.url : (l.url.startsWith('/') ? l.url : `/${l.url}`);
+        break;
+      }
+    }
+  }
+}
+
+function charSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  let matches = 0;
+  for (const c of a) { if (b.includes(c)) matches++; }
+  return matches / Math.max(a.length, b.length);
+}
+
 // ── Product Block Splitting ────────────────────────────────
 
 function splitProducts(html: string, selector: string): string[] {
@@ -683,6 +715,7 @@ export async function scrapeBrand(
     // 2. Always try JSON-LD first (fast and reliable)
     let products = extractJsonLdProducts(html, brand);
     if (products.length > 0) {
+      enrichUrls(products, html);
       console.log(`[Scraper] ${brand.name} (JSON-LD): found ${products.length} products`);
       return { brand_id: brand.id, products };
     }
@@ -691,6 +724,7 @@ export async function scrapeBrand(
     const key = brand.name.toLowerCase();
     if (BRAND_STRATEGIES[key]) {
       const products = BRAND_STRATEGIES[key](html, brand);
+      enrichUrls(products, html);
       console.log(`[Scraper] ${brand.name} (custom): found ${products.length} products`);
       return { brand_id: brand.id, products };
     }
@@ -698,6 +732,7 @@ export async function scrapeBrand(
     // 3. Auto-detect and use CSS selector config
     const config = getConfig(html, brand);
     products = discoverProducts(html, config);
+    enrichUrls(products, html);
 
     console.log(`[Scraper] ${brand.name}: found ${products.length} products`);
     return { brand_id: brand.id, products };
