@@ -6,4 +6,4 @@ INSERT OR IGNORE INTO brands (name, website) VALUES
     ('Simagic',   'https://simagic.com/collections/all'),
     ('Simucube',  'https://simucube.com/store'),
     ('Asetek',    'https://www.asetek.com/simsports'),
-    ('Logitech',  'https://www.logitechg.com/en-us/products/driving.html');
+    ('Logitech',  'https://www.logitechg.com/en-us/shop/c/racing-wheels-pedals');
