@@ -30,6 +30,7 @@ function json<T>(data: ApiResponse<T>, status = 200): Response {
 // ── Router ─────────────────────────────────────────────────
 
 async function handleRequest(req: Request, env: Env): Promise<Response> {
+  try {
   const url = new URL(req.url);
   const path = url.pathname;
 
@@ -88,6 +89,18 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
     return json<ProductWithChange[]>({ success: true, data: products });
   }
 
+  // GET /api/debug — health check with external fetch test
+  if (path === '/api/debug' && req.method === 'GET') {
+    try {
+      const test = await fetch('https://httpbin.org/ip', {
+        headers: { 'User-Agent': 'PriceTracker/1.0' },
+      });
+      return json({ success: true, data: { status: test.status, ok: test.ok } });
+    } catch (err: any) {
+      return json({ success: false, error: `Fetch test failed: ${err.message}` }, 500);
+    }
+  }
+
   // POST /api/crawl — trigger manual crawl (all brands)
   if (path === '/api/crawl' && req.method === 'POST') {
     return handleCrawl(env, db);
@@ -111,6 +124,10 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
 
   // Serve the dashboard SPA
   return env.ASSETS.fetch(req);
+  } catch (err: any) {
+    console.error('[Worker] Unhandled error:', err.message, err.stack);
+    return json<null>({ success: false, error: `Internal error: ${err.message}` }, 500);
+  }
 }
 
 // ── Crawl Handler ──────────────────────────────────────────
@@ -130,12 +147,14 @@ async function handleCrawl(env: Env, db: PriceDB, brandId?: number): Promise<Res
     let totalFound = 0;
     let totalUpdated = 0;
     let totalChanges = 0;
+    const details: any[] = [];
 
     for (const result of results) {
       const logId = await db.startCrawlLog(result.brand_id);
 
       if (result.error) {
         await db.finishCrawlLog(logId, 0, 0, 0, result.error);
+        details.push({ brand_id: result.brand_id, error: result.error });
         continue;
       }
 
@@ -145,6 +164,7 @@ async function handleCrawl(env: Env, db: PriceDB, brandId?: number): Promise<Res
       totalFound += stats.found;
       totalUpdated += stats.updated;
       totalChanges += stats.changes;
+      details.push({ brand_id: result.brand_id, products: result.products.length, ...stats });
     }
 
     return json({
@@ -155,6 +175,7 @@ async function handleCrawl(env: Env, db: PriceDB, brandId?: number): Promise<Res
         products_found: totalFound,
         products_updated: totalUpdated,
         price_changes: totalChanges,
+        details,
       },
     });
   } catch (err: any) {

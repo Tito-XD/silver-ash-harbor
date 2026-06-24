@@ -71,6 +71,77 @@ const BRAND_STRATEGIES: Record<string, (html: string, brand: { id: number; name:
   },
 
   /**
+   * Simucube — WooCommerce.
+   */
+  simucube: (html: string, brand) => {
+    const products: ScrapedProduct[] = [];
+    const seen = new Set<string>();
+
+    const linkRe = /<a[^>]*href="(\/simucube-[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    const links: { url: string; name: string; idx: number }[] = [];
+    let lm: RegExpExecArray | null;
+    while ((lm = linkRe.exec(html)) !== null) {
+      const name = stripHtml(lm[2]).trim();
+      if (name.length >= 4 && !seen.has(name)) links.push({ url: lm[1], name, idx: lm.index });
+    }
+
+    const priceRe = /€\s*([\d,]+\.?\d{0,2})/g;
+    const prices: { val: number; idx: number }[] = [];
+    let pm: RegExpExecArray | null;
+    while ((pm = priceRe.exec(html)) !== null) {
+      const val = parseFloat(pm[1].replace(/,/g, ''));
+      if (val > 0) prices.push({ val, idx: pm.index });
+    }
+
+    for (const p of prices) {
+      let best: typeof links[0] | null = null;
+      for (const l of links) {
+        if (l.idx < p.idx && (!best || l.idx > best.idx)) best = l;
+      }
+      if (best && !seen.has(best.name)) {
+        seen.add(best.name);
+        products.push({
+          name: best.name,
+          price: p.val,
+          currency: 'EUR',
+          url: best.url.startsWith('http') ? best.url : `https://simucube.com${best.url}`,
+        });
+      }
+    }
+    return products;
+  },
+
+  /**
+   * Asetek SimSports — WordPress/WooCommerce.
+   */
+  asetek: (html: string, brand) => {
+    const products: ScrapedProduct[] = [];
+    const seen = new Set<string>();
+
+    const priceRe = /€\s*([\d,]+\.?\d{0,2})/g;
+    const prices: { val: number; idx: number }[] = [];
+    let pm: RegExpExecArray | null;
+    while ((pm = priceRe.exec(html)) !== null) {
+      const val = parseFloat(pm[1].replace(/,/g, ''));
+      if (val > 0) prices.push({ val, idx: pm.index });
+    }
+
+    for (const p of prices) {
+      const before = html.substring(Math.max(0, p.idx - 600), p.idx);
+      const hRe = /<h[2-4][^>]*>([\s\S]*?)<\/h[2-4]>/ig;
+      let nameMatch: RegExpExecArray | null = null, tmp: RegExpExecArray | null;
+      while ((tmp = hRe.exec(before)) !== null) nameMatch = tmp;
+      if (!nameMatch) continue;
+      const name = stripHtml(nameMatch[1]).trim();
+      if (name.length < 4 || name.length > 120 || seen.has(name)) continue;
+      if (/add to cart|buy now|learn more/i.test(name)) continue;
+      seen.add(name);
+      products.push({ name, price: p.val, currency: 'EUR' });
+    }
+    return products;
+  },
+
+  /**
    * Logitech G — Adobe Experience Manager / custom site.
    * Product cards with:
    *   data-* attributes or JSON-LD structured data
@@ -316,37 +387,19 @@ function escapeRegex(str: string): string {
 function splitProducts(html: string, selector: string): string[] {
   const parts = selector.trim().split(/\s*,\s*/);
   const blocks: string[] = [];
+  const MAX_BLOCKS = 120; // CPU guard
 
   for (const part of parts) {
-    if (part.startsWith('.')) {
-      const cls = part.slice(1);
-      const pattern = new RegExp(
-        `<[^>]*class="[^"]*\\b${escapeRegex(cls)}\\b[^"]*"[^>]*>[\\s\\S]*?(?=<[^>]*class="[^"]*\\b${escapeRegex(cls)}\\b|<\\/[a-z]+>\\s*$|$)`,
-        'gi'
-      );
-      let match: RegExpExecArray | null;
-      while ((match = pattern.exec(html)) !== null) {
-        const block = match[0];
-        const tagMatch = block.match(new RegExp(`<(\\w+)[^>]*class="[^"]*\\b${escapeRegex(cls)}\\b[^"]*"[^>]*>`));
-        if (tagMatch) {
-          const tag = tagMatch[1];
-          const startIdx = match.index;
-          let depth = 1;
-          let idx = startIdx + block.length;
-          const tagPattern = new RegExp(`<\\/?${tag}\\b`, 'g');
-          tagPattern.lastIndex = idx;
-          while (depth > 0) {
-            const tm = tagPattern.exec(html);
-            if (!tm) break;
-            if (tm[0].startsWith('</')) depth--;
-            else depth++;
-            idx = tm.index + tm[0].length;
-          }
-          blocks.push(html.substring(startIdx, idx));
-        } else {
-          blocks.push(block);
-        }
-      }
+    if (!part.startsWith('.')) continue;
+    const cls = part.slice(1);
+    const pattern = new RegExp(
+      `<[^>]*class="[^"]*\\b${escapeRegex(cls)}\\b[^"]*"[^>]*>[\\s\\S]*?(?=<[^>]*class="[^"]*\\b${escapeRegex(cls)}\\b|<\\/[a-z]+>\\s*$|$)`,
+      'gi'
+    );
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(html)) !== null && blocks.length < MAX_BLOCKS) {
+      const block = match[0];
+      blocks.push(block);
     }
   }
 
@@ -414,7 +467,8 @@ function broadDiscovery(html: string, baseUrl: string): ScrapedProduct[] {
   }
 
   for (const p of prices) {
-    const context = html.substring(Math.max(0, p.index - 600), p.index);
+    if (products.length >= 50) break; // CPU guard
+    const context = html.substring(Math.max(0, p.index - 400), p.index); // smaller window for CPU safety
     // Find product name: heading, link text, or structured data nearby
     const patterns = [
       /<(?:h[2-4])[^>]*>([\s\S]*?)<\/(?:h[2-4])>/i,
@@ -508,23 +562,26 @@ export async function scrapeBrand(
     });
 
     if (!response.ok) {
-      return { brand_id: brand.id, products: [], error: `HTTP ${response.status}` };
+      return { brand_id: brand.id, products: [], error: `HTTP ${response.status} ${response.statusText}` };
     }
 
-    const html = await response.text();
+    const fullHtml = await response.text();
+    const html = fullHtml.substring(0, 500_000);
+    const debugInfo = `url=${response.url} status=${response.status} len=${fullHtml.length}`;
+    console.log(`[Scraper] ${brand.name}: ${debugInfo}`);
 
-    // 1. Try brand-specific strategy first
+    // 1. Always try JSON-LD first (fast and reliable)
+    let products = extractJsonLdProducts(html, brand);
+    if (products.length > 0) {
+      console.log(`[Scraper] ${brand.name} (JSON-LD): found ${products.length} products`);
+      return { brand_id: brand.id, products };
+    }
+
+    // 2. Try brand-specific strategy
     const key = brand.name.toLowerCase();
     if (BRAND_STRATEGIES[key]) {
       const products = BRAND_STRATEGIES[key](html, brand);
       console.log(`[Scraper] ${brand.name} (custom): found ${products.length} products`);
-      return { brand_id: brand.id, products };
-    }
-
-    // 2. Try JSON-LD structured data (works for many modern sites)
-    let products = extractJsonLdProducts(html, brand);
-    if (products.length > 0) {
-      console.log(`[Scraper] ${brand.name} (JSON-LD): found ${products.length} products`);
       return { brand_id: brand.id, products };
     }
 
