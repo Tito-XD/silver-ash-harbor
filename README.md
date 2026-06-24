@@ -26,51 +26,26 @@ silver-ash-harbor/
 
 ## Quick Start
 
-### 1. Install dependencies
+### 一键部署（推荐）
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+脚本自动完成：安装依赖 → 创建 D1 → 初始化表 → 写入品牌数据 → 部署 Worker
+
+### 手动部署（分步）
 
 ```bash
 cd worker
 npm install
-```
-
-### 2. Create the D1 database
-
-```bash
 npx wrangler d1 create price-db
-```
-
-Copy the output `database_id` into `worker/wrangler.toml` under `[[d1_databases]].database_id`.
-
-### 3. Initialize the database
-
-```bash
+# 将输出的 database_id 填入 wrangler.toml
 npx wrangler d1 execute price-db --file=../schema.sql
 npx wrangler d1 execute price-db --file=../seed.sql
-```
-
-### 4. Add your brands
-
-Edit `seed.sql` to add your own brand websites, or use the API:
-
-```bash
-curl -X POST https://your-worker.workers.dev/api/brands \
-  -H "Content-Type: application/json" \
-  -d '{"name":"My Brand","website":"https://example.com"}'
-```
-
-### 5. Deploy
-
-```bash
 npx wrangler deploy
 ```
-
-### 6. Trigger a crawl
-
-```bash
-curl -X POST https://your-worker.workers.dev/api/crawl
-```
-
-Or visit the dashboard and click **Crawl Now**.
 
 ## Cron Schedule
 
