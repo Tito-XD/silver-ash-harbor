@@ -145,8 +145,8 @@ function updateDashboardCards(data) {
 
 function updateBrandTabs(brands) {
   const container = document.getElementById('brand-tabs');
-  // Keep "All Brands" tab, remove old brand tabs
-  container.querySelectorAll('.tab[data-brand]:not([data-brand="all"])').forEach(t => t.remove());
+  // Keep "All Brands" and "Price Changes" tabs, remove old brand tabs only
+  container.querySelectorAll('.tab[data-brand]:not([data-brand="all"]):not([data-brand="changes"])').forEach(t => t.remove());
 
   for (const brand of brands) {
     const btn = document.createElement('button');
@@ -164,6 +164,14 @@ function updateActiveTab() {
     const isActive = String(tab.dataset.brand) === String(state.currentBrand);
     tab.classList.toggle('active', isActive);
   });
+
+  // Update changes badge count
+  const changedCount = state.allProducts.filter(p =>
+    p.change_direction === 'up' || p.change_direction === 'down'
+  ).length;
+  const badge = document.getElementById('changes-badge');
+  badge.textContent = changedCount;
+  badge.style.display = changedCount > 0 ? '' : 'none';
 }
 
 // ── Table Rendering ────────────────────────────────────────
@@ -171,8 +179,15 @@ function updateActiveTab() {
 function renderTable() {
   let products = state.allProducts;
 
+  // Filter: Price Changes tab
+  if (state.currentBrand === 'changes') {
+    products = products.filter(p =>
+      p.change_direction === 'up' || p.change_direction === 'down'
+    );
+  }
+
   // Filter by brand
-  if (state.currentBrand !== 'all') {
+  if (state.currentBrand !== 'all' && state.currentBrand !== 'changes') {
     products = products.filter(p => p.brand_id === parseInt(state.currentBrand));
   }
 
