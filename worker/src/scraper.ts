@@ -13,23 +13,31 @@ import { BrandConfig, ScrapedProduct, ScrapeResult } from './types';
  */
 const BRAND_STRATEGIES: Record<string, (html: string, brand: { id: number; name: string; website: string }) => ScrapedProduct[]> = {
   /**
-   * Fanatec — custom headless CMS (Next.js / SSR).
-   * Product blocks have:
-   *   <div class="...collapse-product-block__item-title...">Product Name</div>
-   *   <span class="sr-only">Current price: $XX.XX</span>
-   *   <a href="https://www.fanatec.com/us/en/p/...">...</a>
+   * Fanatec — supports both homepage format and /c/ category page format.
+   * Homepage: <div class="...collapse-product-block__item-title...">Name</div>
+   * Category: <button class="ProductTile_product-name__zf5J8">Name</button>
+   * Both: <span class="sr-only">Current price: $XX.XX</span>
    */
   fanatec: (html: string, brand) => {
     const products: ScrapedProduct[] = [];
     const seen = new Set<string>();
 
-    // Find product names from title divs
-    const nameRe = /<div[^>]*class="[^"]*collapse-product-block__item-title[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-    const names: { name: string; idx: number }[] = [];
+    // Find product names — try both formats
+    const nameSources: { name: string; idx: number }[] = [];
+
+    // Format 1: collapse-product-block__item-title (homepage)
+    const nameRe1 = /<div[^>]*class="[^"]*collapse-product-block__item-title[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
     let nm: RegExpExecArray | null;
-    while ((nm = nameRe.exec(html)) !== null) {
+    while ((nm = nameRe1.exec(html)) !== null) {
       const name = stripHtml(nm[1]).trim();
-      if (name.length >= 4 && !seen.has(name)) names.push({ name, idx: nm.index });
+      if (name.length >= 4) nameSources.push({ name, idx: nm.index });
+    }
+
+    // Format 2: ProductTile_product-name__zf5J8 (category pages)
+    const nameRe2 = /<button[^>]*class="[^"]*ProductTile_product-name__[^"]*"[^>]*>([\s\S]*?)<\/button>/gi;
+    while ((nm = nameRe2.exec(html)) !== null) {
+      const name = stripHtml(nm[1]).trim();
+      if (name.length >= 4) nameSources.push({ name, idx: nm.index });
     }
 
     // Find product links (href contains /p/)
@@ -48,13 +56,12 @@ const BRAND_STRATEGIES: Record<string, (html: string, brand: { id: number; name:
 
     // Match prices to closest preceding name
     for (const p of prices) {
-      let bestName: typeof names[0] | null = null;
-      for (const n of names) {
+      let bestName: typeof nameSources[0] | null = null;
+      for (const n of nameSources) {
         if (n.idx < p.idx && (!bestName || n.idx > bestName.idx)) bestName = n;
       }
       if (!bestName || seen.has(bestName.name)) continue;
 
-      // Find closest link before this price
       let bestLink: typeof links[0] | null = null;
       for (const l of links) {
         if (l.idx < p.idx && (!bestLink || l.idx > bestLink.idx)) bestLink = l;
@@ -605,9 +612,11 @@ async function scrapeSimucubeApi(
 async function scrapeFanatecMulti(brand: { id: number; name: string; website: string }): Promise<ScrapedProduct[]> {
   const urls = [
     brand.website,  // homepage /us/en
-    'https://www.fanatec.com/us/en/racing-wheels',
-    'https://www.fanatec.com/us/en/wheel-bases',
-    'https://www.fanatec.com/us/en/pedals',
+    'https://www.fanatec.com/us/en/c/sim-racing-bundles',
+    'https://www.fanatec.com/us/en/c/wheel-bases',
+    'https://www.fanatec.com/us/en/c/steering-wheels',
+    'https://www.fanatec.com/us/en/c/pedals',
+    'https://www.fanatec.com/us/en/c/add-ons',
   ];
   const allProducts: ScrapedProduct[] = [];
   const seen = new Set<string>();
