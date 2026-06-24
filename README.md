@@ -1,6 +1,6 @@
 # Silver Ash Harbor
 
-Multi-brand price tracking and monitoring tool. Crawls brand websites, tracks product prices over time, and surfaces changes via a clean dashboard.
+Sim racing gear price tracker. Monitors **Fanatec, Simagic, Simucube, Asetek, Logitech** product prices, tracks changes over time, and surfaces them via a clean dashboard.
 
 ## Architecture
 
@@ -89,15 +89,28 @@ The dashboard shows:
 - **Product table**: price, previous price, change direction & percentage
 - **Crawl history**: status, results, timestamps of past crawls
 
+## Tracked Brands
+
+| Brand | Site Type | Scraping Strategy |
+|-------|-----------|-------------------|
+| Fanatec | Custom CMS | `Current price:` marker + product links |
+| Simagic | Shopify | Auto-detected Shopify grid |
+| Simucube | WooCommerce | Auto-detected WooCommerce grid |
+| Asetek | WordPress/WooCommerce | Auto-detected + JSON-LD |
+| Logitech | AEM / Custom | JSON-LD + heading/price proximity |
+
 ## Customizing the Scraper
 
-The scraper auto-detects Shopify and WooCommerce sites. For other sites, configure CSS selectors in `worker/src/scraper.ts`:
+Each brand gets its own scraping strategy in `worker/src/scraper.ts`. Shopify and WooCommerce sites are auto-detected. For custom sites like Fanatec and Logitech, brand-specific functions extract products by HTML pattern matching.
+
+To add a new brand, add a function in `BRAND_STRATEGIES` keyed by lowercase brand name:
 
 ```ts
-const config = {
-  productSelector: '.product-item',
-  nameSelector: '.product-title',
-  priceSelector: '.price',
+const BRAND_STRATEGIES: Record<string, Strategy> = {
+  mybrand: (html, brand) => {
+    // Extract products using regex / JSON-LD / CSS selectors
+    return [{ name: 'Product X', price: 99.99, currency: 'USD' }];
+  },
 };
 ```
 

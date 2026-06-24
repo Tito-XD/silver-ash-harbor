@@ -1,7 +1,9 @@
--- Seed data: sample brands (replace with your actual brands)
--- Add your own brands here after running `wrangler d1 execute price-db --file=schema.sql`
+-- Seed data: Sim Racing brands for price tracking
+-- Run after schema.sql: wrangler d1 execute price-db --file=seed.sql
 
 INSERT OR IGNORE INTO brands (name, website) VALUES
-    ('Moza Racing', 'https://mozaracing.com'),
-    ('Fanatec', 'https://fanatec.com'),
-    ('Simucube', 'https://simucube.com');
+    ('Fanatec',   'https://fanatec.com/us-en'),
+    ('Simagic',   'https://simagic.com/collections/all'),
+    ('Simucube',  'https://simucube.com/store'),
+    ('Asetek',    'https://www.asetek.com/simsports'),
+    ('Logitech',  'https://www.logitechg.com/en-us/products/driving.html');
