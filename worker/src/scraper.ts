@@ -548,10 +548,104 @@ function getConfig(html: string, brand: { id: number; name: string; website: str
 
 // ── Main Scrape Entry ──────────────────────────────────────
 
+/**
+ * Simucube: fetch products from WP REST API (WooCommerce Store API).
+ * Returns structured JSON with all product data — much faster than HTML scraping.
+ */
+async function scrapeSimucubeApi(
+  brand: { id: number; name: string; website: string }
+): Promise<ScrapeResult> {
+  const BASE = 'https://simucube.com/wp-json/wc/store/v1/products';
+  const allProducts: ScrapedProduct[] = [];
+  const seen = new Set<string>();
+
+  try {
+    // Fetch all pages (100 per page)
+    for (let page = 1; page <= 5; page++) {
+      const url = `${BASE}?per_page=100&page=${page}`;
+      const resp = await fetch(url, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'PriceTracker/1.0' },
+      });
+      if (!resp.ok) break;
+
+      const data: any[] = await resp.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+
+      for (const p of data) {
+        const name = (p.name || '').trim();
+        if (!name || seen.has(name)) continue;
+
+        const priceCents = parseFloat(p.prices?.price || '0');
+        const currency = p.prices?.currency_code || 'EUR';
+        const priceInUnit = currency === 'JPY' ? priceCents : priceCents / 100;
+
+        if (priceInUnit > 0) {
+          seen.add(name);
+          allProducts.push({
+            name,
+            price: priceInUnit,
+            currency,
+            url: p.permalink || undefined,
+          });
+        }
+      }
+
+      // If this page had fewer than 100 items, we're done
+      if (data.length < 100) break;
+    }
+
+    console.log(`[Scraper] ${brand.name} (API): found ${allProducts.length} products`);
+    return { brand_id: brand.id, products: allProducts };
+  } catch (err: any) {
+    console.error(`[Scraper] ${brand.name} API error:`, err.message);
+    return { brand_id: brand.id, products: [], error: err.message };
+  }
+}
+
+async function scrapeFanatecMulti(brand: { id: number; name: string; website: string }): Promise<ScrapedProduct[]> {
+  const urls = [
+    brand.website,  // homepage /us/en
+    'https://www.fanatec.com/us/en/racing-wheels',
+    'https://www.fanatec.com/us/en/wheel-bases',
+    'https://www.fanatec.com/us/en/pedals',
+  ];
+  const allProducts: ScrapedProduct[] = [];
+  const seen = new Set<string>();
+
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PriceTracker/1.0)', 'Accept': 'text/html' },
+        redirect: 'follow',
+      });
+      if (!resp.ok) continue;
+
+      const html = (await resp.text()).substring(0, 500_000);
+
+      // Use the same Fanatec strategy on each page
+      const products = BRAND_STRATEGIES['fanatec'](html, brand);
+      for (const p of products) {
+        if (!seen.has(p.name)) {
+          seen.add(p.name);
+          allProducts.push(p);
+        }
+      }
+    } catch { /* skip failed pages */ }
+  }
+
+  console.log(`[Scraper] Fanatec multi-page: ${allProducts.length} products from ${urls.length} URLs`);
+  return allProducts;
+}
+
 export async function scrapeBrand(
   brand: { id: number; name: string; website: string }
 ): Promise<ScrapeResult> {
   console.log(`[Scraper] Crawling ${brand.name} (${brand.website})...`);
+
+  // ── API-based strategies (REST / JSON endpoints) ──────────
+  if (brand.name.toLowerCase() === 'simucube') {
+    return scrapeSimucubeApi(brand);
+  }
 
   try {
     const response = await fetch(brand.website, {
@@ -571,14 +665,20 @@ export async function scrapeBrand(
     const debugInfo = `url=${response.url} status=${response.status} len=${fullHtml.length}`;
     console.log(`[Scraper] ${brand.name}: ${debugInfo}`);
 
-    // 1. Always try JSON-LD first (fast and reliable)
+    // 1. Fanatec: multi-page crawl for more products
+    if (brand.name.toLowerCase() === 'fanatec') {
+      const products = await scrapeFanatecMulti(brand);
+      return { brand_id: brand.id, products };
+    }
+
+    // 2. Always try JSON-LD first (fast and reliable)
     let products = extractJsonLdProducts(html, brand);
     if (products.length > 0) {
       console.log(`[Scraper] ${brand.name} (JSON-LD): found ${products.length} products`);
       return { brand_id: brand.id, products };
     }
 
-    // 2. Try brand-specific strategy
+    // 3. Try brand-specific strategy
     const key = brand.name.toLowerCase();
     if (BRAND_STRATEGIES[key]) {
       const products = BRAND_STRATEGIES[key](html, brand);
