@@ -557,11 +557,66 @@ tbody tr:last-child td {
   border-radius: 4px;
   transition: width .3s ease-out;
 }
-.crawl-progress-text {
+.crawl-progress-bar-text {
   font-size: 0.85rem;
   color: var(--text-secondary);
   font-weight: 600;
 }
+/* Brand row with logos */
+.crawl-progress-brand-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.cb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all .25s;
+}
+.cb-item img {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+.cb-pending { opacity: 0.3; }
+.cb-active {
+  background: var(--primary-light);
+  color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+  transform: scale(1.05);
+}
+.cb-done {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.cb-done i {
+  color: var(--success);
+  font-style: normal;
+  font-weight: 700;
+}
+/* Product name ticker */
+.crawl-progress-products {
+  margin-top: 12px;
+  min-height: 1.2em;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+}
+.cp-products-scroll {
+  white-space: nowrap;
+  animation: productScroll 8s linear infinite;
+}
+@keyframes productScroll {
+  0% { transform: translateX(60%); }
+  100% { transform: translateX(-60%); }
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

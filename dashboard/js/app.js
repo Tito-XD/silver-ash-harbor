@@ -131,44 +131,81 @@ async function triggerCrawl() {
   const btn = document.getElementById('btn-crawl');
   btn.disabled = true;
 
-  // Create progress overlay
   const overlay = document.createElement('div');
   overlay.className = 'crawl-progress';
   overlay.innerHTML = `
     <div class="crawl-progress-card">
       <div class="crawl-progress-title">正在爬取...</div>
-      <div class="crawl-progress-brand" id="crawl-progress-brand">准备中</div>
+      <div class="crawl-progress-brand-row" id="crawl-progress-brand-row"></div>
       <div class="crawl-progress-bar-track">
         <div class="crawl-progress-bar-fill" id="crawl-progress-fill" style="width:0%"></div>
       </div>
       <div class="crawl-progress-text" id="crawl-progress-text">0 / 5</div>
+      <div class="crawl-progress-products" id="crawl-progress-products"></div>
     </div>`;
   document.body.appendChild(overlay);
 
   const brands = state.brands;
   let totalFound = 0, totalChanges = 0, completed = 0;
 
-  function updateProgress(brandName, done, total) {
-    document.getElementById('crawl-progress-brand').textContent = brandName;
+  const brandRow = document.getElementById('crawl-progress-brand-row');
+  const productsEl = document.getElementById('crawl-progress-products');
+
+  function updateProgress(brandName, done, total, productNames = []) {
     document.getElementById('crawl-progress-fill').style.width = `${(done / total) * 100}%`;
     document.getElementById('crawl-progress-text').textContent = `${done} / ${total}`;
+
+    // Update brand row: show logo + name for active brand, checks for done
+    brandRow.innerHTML = brands.map((b, i) => {
+      const src = brandLogoUrl(b.name);
+      const fb = brandLogoFallback(b.name);
+      const onerr = fb ? `onerror="this.src='${fb}';this.onerror=null"` : '';
+      if (i < done) {
+        // Done: greyed out with check
+        return `<span class="cb-item cb-done"><img src="${src}" alt="${b.name}" width="18" height="18" ${onerr}><span>${b.name}</span><i>&#10003;</i></span>`;
+      }
+      if (i === done) {
+        // Active: highlighted
+        return `<span class="cb-item cb-active"><img src="${src}" alt="${b.name}" width="18" height="18" ${onerr}><span>${b.name}</span></span>`;
+      }
+      // Pending: dimmed
+      return `<span class="cb-item cb-pending"><img src="${src}" alt="${b.name}" width="18" height="18" ${onerr}><span>${b.name}</span></span>`;
+    }).join('');
+
+    // Show product names scrolling
+    if (productNames.length > 0) {
+      const names = productNames.slice(0, 8).map(n => `<span>${escapeHtml(n)}</span>`).join('  ·  ');
+      productsEl.innerHTML = `<div class="cp-products-scroll">${names}</div>`;
+    }
   }
 
   try {
-    for (const brand of brands) {
-      updateProgress(brand.name, completed, brands.length);
+    for (let i = 0; i < brands.length; i++) {
+      const brand = brands[i];
+      updateProgress(brand.name, i, brands.length);
+
+      let productNames = [];
       try {
         const res = await api(`/crawl/${brand.id}`, { method: 'POST' });
         if (res.success && res.data) {
           totalFound += res.data.products_found || 0;
           totalChanges += res.data.price_changes || 0;
         }
-      } catch { /* skip failed brand */ }
+        // Fetch the brand's products for display
+        const prodRes = await api(`/brands/${brand.id}/products`);
+        if (prodRes.success && prodRes.data) {
+          productNames = prodRes.data.map(p => p.name).filter(Boolean);
+        }
+      } catch { /* skip */ }
+
       completed++;
+      updateProgress(brand.name, completed, brands.length, productNames);
+      await new Promise(r => setTimeout(r, 400)); // pause to show products
     }
 
-    updateProgress('完成!', brands.length, brands.length);
-    await new Promise(r => setTimeout(r, 500)); // brief pause to show 100%
+    document.getElementById('crawl-progress-text').textContent = '完成!';
+    productsEl.innerHTML = '';
+    await new Promise(r => setTimeout(r, 500));
 
     showToast(
       `已爬取 ${brands.length} 个品牌，${totalFound} 个产品，${totalChanges} 处价格变动`,
