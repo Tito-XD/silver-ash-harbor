@@ -4,20 +4,37 @@
 
 const API_BASE = '/api';
 
-// Brand config with logo paths
+// Brand config with domain for favicon lookup
 const BRAND_CONFIG = {
-  Fanatec:  { color: '#1a1a1a', logo: 'logos/fanatec.svg' },
-  Simagic:  { color: '#0052cc', logo: 'logos/simagic.svg' },
-  Logitech: { color: '#00b8fc', logo: 'logos/logitech.svg' },
-  Simucube: { color: '#ff6a00', logo: 'logos/simucube.svg' },
-  Asetek:   { color: '#0066cc', logo: 'logos/asetek.svg' },
+  Fanatec:  { color: '#1a1a1a', domain: 'www.fanatec.com' },
+  Simagic:  { color: '#0052cc', domain: 'simagic.com', fallbackDomain: 'simagic.com' },
+  Logitech: { color: '#00b8fc', domain: 'www.logitechg.com' },
+  Simucube: { color: '#ff6a00', domain: 'simucube.com' },
+  Asetek:   { color: '#0066cc', domain: 'www.asetek.com', fallbackDomain: 'asetek.com' },
 };
+
+function brandLogoUrl(name) {
+  const cfg = BRAND_CONFIG[name];
+  if (!cfg || !cfg.domain) return '';
+  // Primary: our proxy (may fail for CF-blocked sites)
+  return `/api/favicon?domain=${cfg.domain}`;
+}
+
+function brandLogoFallback(name) {
+  const cfg = BRAND_CONFIG[name];
+  const fb = cfg?.fallbackDomain;
+  if (!fb) return '';
+  // Fallback: Google favicon proxy
+  return `https://www.google.com/s2/favicons?domain=${fb}&sz=32`;
+}
 
 function brandBadge(name) {
   const cfg = BRAND_CONFIG[name] || { color: '#6b7280' };
-  const logoSrc = cfg.logo || '';
-  if (logoSrc) {
-    return `<img class="brand-logo" src="${logoSrc}" alt="${name}" width="24" height="24"><span style="font-weight:600;color:${cfg.color}">${name}</span>`;
+  const src = brandLogoUrl(name);
+  const fallback = brandLogoFallback(name);
+  const onerror = fallback ? `onerror="this.src='${fallback}';this.onerror=null"` : '';
+  if (src) {
+    return `<img class="brand-logo" src="${src}" alt="${name}" width="24" height="24" ${onerror}><span style="font-weight:600;color:${cfg.color}">${name}</span>`;
   }
   return `<span style="font-weight:600;color:${cfg.color}">${name}</span>`;
 }
@@ -165,8 +182,10 @@ function updateBrandTabs(brands) {
 
   for (const brand of brands) {
     const cfg = BRAND_CONFIG[brand.name] || { color: '#6b7280' };
-    const logoSrc = cfg.logo || '';
-    const logoHtml = logoSrc ? `<img class="brand-tab-logo" src="${logoSrc}" alt="${brand.name}" width="20" height="20">` : '';
+    const src = brandLogoUrl(brand.name);
+    const fallback = brandLogoFallback(brand.name);
+    const onerror = fallback ? `onerror="this.src='${fallback}';this.onerror=null"` : '';
+    const logoHtml = src ? `<img class="brand-tab-logo" src="${src}" alt="${brand.name}" width="20" height="20" ${onerror}>` : '';
     const btn = document.createElement('button');
     btn.className = 'tab';
     btn.dataset.brand = brand.id;

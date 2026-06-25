@@ -89,6 +89,28 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
     return json<ProductWithChange[]>({ success: true, data: products });
   }
 
+  // GET /api/favicon?domain=X — proxy favicon (no CORS issues)
+  if (path === '/api/favicon' && req.method === 'GET') {
+    const domain = url.searchParams.get('domain');
+    if (!domain) return json(null, { success: false, error: 'domain required' }, 400);
+    try {
+      const faviconResp = await fetch(`https://${domain}/favicon.ico`, {
+        headers: { 'User-Agent': 'PriceTracker/1.0' },
+      });
+      if (!faviconResp.ok) throw new Error(`HTTP ${faviconResp.status}`);
+      const data = await faviconResp.arrayBuffer();
+      return new Response(data, {
+        headers: {
+          'Content-Type': faviconResp.headers.get('Content-Type') || 'image/x-icon',
+          'Cache-Control': 'public, max-age=86400',
+          ...corsHeaders,
+        },
+      });
+    } catch {
+      return new Response(null, { status: 404, headers: corsHeaders });
+    }
+  }
+
   // GET /api/debug — health check with external fetch test
   if (path === '/api/debug' && req.method === 'GET') {
     try {
