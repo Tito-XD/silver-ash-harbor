@@ -164,7 +164,7 @@ body {
 }
 
 .tab {
-  padding: 8px 18px;
+  padding: 8px 14px;
   border: none;
   background: none;
   font-size: 0.875rem;
@@ -176,11 +176,28 @@ body {
   position: relative;
   bottom: -2px;
   border-bottom: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .tab:hover {
   color: var(--primary);
   background: var(--primary-light);
+}
+
+/* Brand logo badge in tabs */
+.brand-tab-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
 }
 
 .tab.active {
@@ -361,6 +378,21 @@ tbody tr:last-child td {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+/* Brand logo + name combo in table */
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 .time-cell {

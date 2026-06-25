@@ -4,6 +4,20 @@
 
 const API_BASE = '/api';
 
+// Brand config with logo colors
+const BRAND_CONFIG = {
+  Fanatec:  { color: '#1a1a1a', bg: '#f5f5f5', logo: 'F' },
+  Simagic:  { color: '#0052cc', bg: '#e6f0ff', logo: 'SM' },
+  Logitech: { color: '#00b8fc', bg: '#e6f9ff', logo: 'LG' },
+  Simucube: { color: '#ff6a00', bg: '#fff3e6', logo: 'SC' },
+  Asetek:   { color: '#0066cc', bg: '#e6f2ff', logo: 'AS' },
+};
+
+function brandBadge(name) {
+  const cfg = BRAND_CONFIG[name] || { color: '#6b7280', bg: '#f0f0f0', logo: name[0] };
+  return `<span class="brand-logo" style="background:${cfg.bg};color:${cfg.color};border:1.5px solid ${cfg.color}">${cfg.logo}</span><span style="font-weight:600;color:${cfg.color}">${name}</span>`;
+}
+
 // Application state
 const state = {
   brands: [],
@@ -35,7 +49,7 @@ function setupEventListeners() {
     const brand = tab.dataset.brand;
     if (brand === state.currentBrand) return;
     state.currentBrand = brand;
-    state.searchQuery = '';  // reset search on tab switch
+    state.searchQuery = '';
     document.getElementById('search-input').value = '';
     updateActiveTab();
     renderTable();
@@ -93,24 +107,23 @@ async function loadCrawlLogs() {
 async function triggerCrawl() {
   const btn = document.getElementById('btn-crawl');
   const origText = btn.innerHTML;
-  btn.innerHTML = '<span class="spinner"></span> Crawling...';
+  btn.innerHTML = '<span class="spinner"></span> 爬取中...';
   btn.disabled = true;
 
   try {
     const res = await api('/crawl', { method: 'POST' });
     if (res.success) {
       showToast(
-        `Crawled ${res.data.brands_crawled} brands, ${res.data.products_found} products, ${res.data.price_changes} changes`,
+        `已爬取 ${res.data.brands_crawled} 个品牌，${res.data.products_found} 个产品，${res.data.price_changes} 处价格变动`,
         'success'
       );
-      // Refresh everything
       await loadDashboard();
       await loadCrawlLogs();
     } else {
-      showToast(res.error || 'Crawl failed', 'error');
+      showToast(res.error || '爬取失败', 'error');
     }
   } catch (err) {
-    showToast('Crawl failed: ' + err.message, 'error');
+    showToast('爬取失败: ' + err.message, 'error');
   } finally {
     btn.innerHTML = origText;
     btn.disabled = false;
@@ -126,17 +139,16 @@ function updateDashboardCards(data) {
 
   const lastCrawl = data.last_crawl_time
     ? formatTime(data.last_crawl_time)
-    : 'Never';
+    : '从未';
   document.getElementById('stat-last-crawl').textContent = lastCrawl;
   document.getElementById('last-update').textContent = data.last_crawl_time
-    ? 'Updated ' + formatTime(data.last_crawl_time)
-    : 'No data';
+    ? '更新于 ' + formatTime(data.last_crawl_time)
+    : '暂无数据';
 
-  // Pulse animation on changes count
   if (data.total_price_changes > 0) {
     const el = document.getElementById('stat-changes');
     el.classList.remove('pulse');
-    void el.offsetWidth; // reflow
+    void el.offsetWidth;
     el.classList.add('pulse');
   }
 }
@@ -145,14 +157,14 @@ function updateDashboardCards(data) {
 
 function updateBrandTabs(brands) {
   const container = document.getElementById('brand-tabs');
-  // Keep "All Brands" and "Price Changes" tabs, remove old brand tabs only
   container.querySelectorAll('.tab[data-brand]:not([data-brand="all"]):not([data-brand="changes"])').forEach(t => t.remove());
 
   for (const brand of brands) {
+    const cfg = BRAND_CONFIG[brand.name] || { color: '#6b7280', bg: '#f0f0f0', logo: brand.name[0] };
     const btn = document.createElement('button');
     btn.className = 'tab';
     btn.dataset.brand = brand.id;
-    btn.innerHTML = `${brand.name} <span class="tab-badge" style="${brand.price_changes > 0 ? '' : 'display:none'}">${brand.price_changes}</span>`;
+    btn.innerHTML = `<span class="brand-tab-logo" style="background:${cfg.bg};color:${cfg.color};border:1.5px solid ${cfg.color}">${cfg.logo}</span>${brand.name} <span class="tab-badge" style="${brand.price_changes > 0 ? '' : 'display:none'}">${brand.price_changes}</span>`;
     container.appendChild(btn);
   }
 
@@ -165,7 +177,6 @@ function updateActiveTab() {
     tab.classList.toggle('active', isActive);
   });
 
-  // Update changes badge count
   const changedCount = state.allProducts.filter(p =>
     p.change_direction === 'up' || p.change_direction === 'down'
   ).length;
@@ -179,19 +190,16 @@ function updateActiveTab() {
 function renderTable() {
   let products = state.allProducts;
 
-  // Filter: Price Changes tab
   if (state.currentBrand === 'changes') {
     products = products.filter(p =>
       p.change_direction === 'up' || p.change_direction === 'down'
     );
   }
 
-  // Filter by brand
   if (state.currentBrand !== 'all' && state.currentBrand !== 'changes') {
     products = products.filter(p => p.brand_id === parseInt(state.currentBrand));
   }
 
-  // Filter by search
   if (state.searchQuery) {
     products = products.filter(p =>
       p.name.toLowerCase().includes(state.searchQuery) ||
@@ -199,9 +207,8 @@ function renderTable() {
     );
   }
 
-  // Update count
   document.getElementById('result-count').textContent =
-    `${products.length} product${products.length !== 1 ? 's' : ''}`;
+    `${products.length} 个产品`;
 
   const tbody = document.getElementById('table-body');
 
@@ -211,7 +218,7 @@ function renderTable() {
         <td colspan="6">
           <div class="empty-state">
             <div class="empty-icon">&#128269;</div>
-            <p>${state.searchQuery ? 'No products match your search.' : 'No data yet. Add brands and run a crawl to start tracking prices.'}</p>
+            <p>${state.searchQuery ? '没有匹配的产品' : '暂无数据，添加品牌并执行爬取即可开始追踪'}</p>
           </div>
         </td>
       </tr>`;
@@ -236,7 +243,7 @@ function renderTable() {
             ${p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.name)}</a>` : escapeHtml(p.name)}
           </span>
         </td>
-        <td><span class="brand-tag">${escapeHtml(brandName)}</span></td>
+        <td>${brandBadge(brandName)}</td>
         <td>${priceHtml}</td>
         <td>${prevHtml}</td>
         <td>${changeHtml}</td>
@@ -255,7 +262,7 @@ function getPriceHtml(p) {
 
 function getChangeHtml(p) {
   if (p.change_direction === 'new') {
-    return '<span class="change-badge new">New</span>';
+    return '<span class="change-badge new">新品</span>';
   }
   if (p.change_direction === 'unchanged' || p.price_change === null) {
     return '<span class="change-badge unchanged">—</span>';
@@ -282,21 +289,23 @@ function renderCrawlLogs(logs) {
   badge.textContent = logs.length;
 
   if (logs.length === 0) {
-    container.innerHTML = '<p class="log-empty">No crawl history yet.</p>';
+    container.innerHTML = '<p class="log-empty">暂无爬取记录</p>';
     return;
   }
+
+  const statusMap = { success: '成功', failed: '失败', running: '进行中', pending: '等待中' };
 
   container.innerHTML = logs.slice(0, 30).map(log => `
     <div class="log-item">
       <div>
-        <span class="log-status ${log.status}">${log.status.toUpperCase()}</span>
+        <span class="log-status ${log.status}">${statusMap[log.status] || log.status.toUpperCase()}</span>
         <span style="margin-left:8px;color:var(--text-secondary)">${getBrandName(log.brand_id)}</span>
       </div>
       <div style="color:var(--text-secondary)">
-        ${log.products_found} found / ${log.price_changes} changes
+        发现 ${log.products_found} / 变动 ${log.price_changes}
       </div>
       <div style="color:var(--text-secondary)">
-        ${log.finished_at ? formatTime(log.finished_at) : 'Running...'}
+        ${log.finished_at ? formatTime(log.finished_at) : '进行中...'}
         ${log.error_msg ? ` &mdash; <span style="color:var(--danger)">${escapeHtml(log.error_msg)}</span>` : ''}
       </div>
     </div>
@@ -321,11 +330,11 @@ function formatTime(isoString) {
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
 
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
 
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('zh-CN', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
