@@ -611,12 +611,12 @@ tbody tr:last-child td {
   overflow: hidden;
 }
 .cp-products-scroll {
-  white-space: nowrap;
-  animation: productScroll 8s linear infinite;
+  text-align: center;
+  animation: productFlash 0.4s ease-out;
 }
-@keyframes productScroll {
-  0% { transform: translateX(60%); }
-  100% { transform: translateX(-60%); }
+@keyframes productFlash {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

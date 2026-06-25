@@ -174,7 +174,7 @@ async function triggerCrawl() {
 
     // Show product names scrolling
     if (productNames.length > 0) {
-      const names = productNames.slice(0, 8).map(n => `<span>${escapeHtml(n)}</span>`).join('  ·  ');
+      const names = productNames.slice(0, 12).map(n => `<span>${escapeHtml(n)}</span>`).join('  ·  ');
       productsEl.innerHTML = `<div class="cp-products-scroll">${names}</div>`;
     }
   }
@@ -200,7 +200,7 @@ async function triggerCrawl() {
 
       completed++;
       updateProgress(brand.name, completed, brands.length, productNames);
-      await new Promise(r => setTimeout(r, 400)); // pause to show products
+      await new Promise(r => setTimeout(r, 800)); // brief pause to show products
     }
 
     document.getElementById('crawl-progress-text').textContent = '完成!';
