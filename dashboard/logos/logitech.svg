@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Logitech "G" logo -->
+  <rect width="48" height="48" rx="8" fill="#00b8fc"/>
+  <path d="M26 12c-6 0-10 4-10 10v4c0 6 4 10 10 10h4c0-3 0-6 0-10 0 0 4 0 4 0 0-4-1-8-5-11-2-2-2-3-3-3z" fill="white"/>
+  <circle cx="26" cy="24" r="5" fill="#00b8fc"/>
+</svg>

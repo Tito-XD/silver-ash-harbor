@@ -4,18 +4,22 @@
 
 const API_BASE = '/api';
 
-// Brand config with logo colors
+// Brand config with logo paths
 const BRAND_CONFIG = {
-  Fanatec:  { color: '#1a1a1a', bg: '#f5f5f5', logo: 'F' },
-  Simagic:  { color: '#0052cc', bg: '#e6f0ff', logo: 'SM' },
-  Logitech: { color: '#00b8fc', bg: '#e6f9ff', logo: 'LG' },
-  Simucube: { color: '#ff6a00', bg: '#fff3e6', logo: 'SC' },
-  Asetek:   { color: '#0066cc', bg: '#e6f2ff', logo: 'AS' },
+  Fanatec:  { color: '#1a1a1a', logo: 'logos/fanatec.svg' },
+  Simagic:  { color: '#0052cc', logo: 'logos/simagic.svg' },
+  Logitech: { color: '#00b8fc', logo: 'logos/logitech.svg' },
+  Simucube: { color: '#ff6a00', logo: 'logos/simucube.svg' },
+  Asetek:   { color: '#0066cc', logo: 'logos/asetek.svg' },
 };
 
 function brandBadge(name) {
-  const cfg = BRAND_CONFIG[name] || { color: '#6b7280', bg: '#f0f0f0', logo: name[0] };
-  return `<span class="brand-logo" style="background:${cfg.bg};color:${cfg.color};border:1.5px solid ${cfg.color}">${cfg.logo}</span><span style="font-weight:600;color:${cfg.color}">${name}</span>`;
+  const cfg = BRAND_CONFIG[name] || { color: '#6b7280' };
+  const logoSrc = cfg.logo || '';
+  if (logoSrc) {
+    return `<img class="brand-logo" src="${logoSrc}" alt="${name}" width="24" height="24"><span style="font-weight:600;color:${cfg.color}">${name}</span>`;
+  }
+  return `<span style="font-weight:600;color:${cfg.color}">${name}</span>`;
 }
 
 // Application state
@@ -160,11 +164,13 @@ function updateBrandTabs(brands) {
   container.querySelectorAll('.tab[data-brand]:not([data-brand="all"]):not([data-brand="changes"])').forEach(t => t.remove());
 
   for (const brand of brands) {
-    const cfg = BRAND_CONFIG[brand.name] || { color: '#6b7280', bg: '#f0f0f0', logo: brand.name[0] };
+    const cfg = BRAND_CONFIG[brand.name] || { color: '#6b7280' };
+    const logoSrc = cfg.logo || '';
+    const logoHtml = logoSrc ? `<img class="brand-tab-logo" src="${logoSrc}" alt="${brand.name}" width="20" height="20">` : '';
     const btn = document.createElement('button');
     btn.className = 'tab';
     btn.dataset.brand = brand.id;
-    btn.innerHTML = `<span class="brand-tab-logo" style="background:${cfg.bg};color:${cfg.color};border:1.5px solid ${cfg.color}">${cfg.logo}</span>${brand.name} <span class="tab-badge" style="${brand.price_changes > 0 ? '' : 'display:none'}">${brand.price_changes}</span>`;
+    btn.innerHTML = `${logoHtml}${brand.name} <span class="tab-badge" style="${brand.price_changes > 0 ? '' : 'display:none'}">${brand.price_changes}</span>`;
     container.appendChild(btn);
   }
 
