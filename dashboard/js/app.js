@@ -157,6 +157,17 @@ async function triggerCrawl() {
 
 function updateDashboardCards(data) {
   document.getElementById('stat-brands').textContent = data.total_brands;
+
+  // Render brand logos in the brands card
+  const logosContainer = document.getElementById('brand-logos-card');
+  if (logosContainer) {
+    logosContainer.innerHTML = data.brands.map(b => {
+      const src = brandLogoUrl(b.name);
+      const fallback = brandLogoFallback(b.name);
+      const onerror = fallback ? `onerror="this.src='${fallback}';this.onerror=null"` : '';
+      return src ? `<img src="${src}" alt="${b.name}" title="${b.name}" width="28" height="28" ${onerror}>` : '';
+    }).join('');
+  }
   document.getElementById('stat-products').textContent = data.total_products;
   document.getElementById('stat-changes').textContent = data.total_price_changes;
 
