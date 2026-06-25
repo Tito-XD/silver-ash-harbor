@@ -422,6 +422,129 @@ function charSimilarity(a: string, b: string): number {
   return matches / Math.max(a.length, b.length);
 }
 
+// ── Sitemap-based Scraping ─────────────────────────────────
+
+interface SitemapConfig {
+  sitemapUrl: string;
+  /** Regex to filter product URLs from the sitemap */
+  productUrlPattern: RegExp;
+  /** Max product pages to crawl (Worker CPU limit) */
+  maxPages?: number;
+}
+
+const SITEMAP_CONFIGS: Record<string, SitemapConfig> = {
+  logitech: {
+    sitemapUrl: 'https://www.logitechg.com/sitemap.xml',
+    productUrlPattern: /\/(rs-|g923|driving-force|pro-racing|pro-dd|pro-wheel|rs50|g920|g29|playseat)/i,
+    maxPages: 22,
+  },
+};
+
+/**
+ * Scrape a single product page for name and price.
+ */
+async function scrapeProductPage(url: string): Promise<ScrapedProduct | null> {
+  try {
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PriceTracker/1.0)', 'Accept': 'text/html' },
+      redirect: 'follow',
+    });
+    if (!resp.ok) return null;
+
+    const html = (await resp.text()).substring(0, 150_000);
+
+    // Extract product name from <title> or <h1>
+    let name = '';
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    if (titleMatch) name = stripHtml(titleMatch[1]).replace(/\s*[|–—-].*/, '').trim();
+    if (!name) {
+      const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      if (h1Match) name = stripHtml(h1Match[1]).trim();
+    }
+    if (!name || name.length < 3) {
+      // Fallback: extract from URL slug
+      const slug = url.split('/').pop()?.replace(/[-_]/g, ' ') || '';
+      name = slug.replace(/\b\w/g, c => c.toUpperCase()).trim();
+    }
+    if (name.length < 3) return null;
+
+    // Extract price — try multiple patterns
+    const pricePatterns = [
+      /Current price:\s*([$€£])\s*([\d,]+\.?\d{2})/i,
+      /\b(price|Price)\b[^>]*>\s*[$€£]?\s*([\d,]+\.?\d{2})/i,
+      /[$€£]\s*([\d,]+\.?\d{2})/,
+    ];
+    let price = 0;
+    let currency = 'USD';
+    for (const pat of pricePatterns) {
+      const m = html.match(pat);
+      if (m) {
+        const sym = m[1] || (html.match(/[$€£]/)?.[0] || '$');
+        const val = m[2] || m[1];
+        price = parseFloat(val.replace(/,/g, ''));
+        if (sym === '€' || sym === 'EUR') currency = 'EUR';
+        else if (sym === '£' || sym === 'GBP') currency = 'GBP';
+        break;
+      }
+    }
+
+    return { name, price: price || 0, currency, url };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Crawl products from a sitemap.
+ */
+async function scrapeViaSitemap(
+  brand: { id: number; name: string; website: string }
+): Promise<ScrapeResult> {
+  const config = SITEMAP_CONFIGS[brand.name.toLowerCase()];
+  if (!config) {
+    return { brand_id: brand.id, products: [], error: 'No sitemap config' };
+  }
+
+  try {
+    // 1. Fetch sitemap and extract product URLs
+    const resp = await fetch(config.sitemapUrl, {
+      headers: { 'User-Agent': 'PriceTracker/1.0' },
+    });
+    if (!resp.ok) {
+      return { brand_id: brand.id, products: [], error: `Sitemap HTTP ${resp.status}` };
+    }
+
+    const xml = await resp.text();
+    const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)]
+      .map(m => m[1].trim())
+      .filter(u => config.productUrlPattern.test(u));
+
+    console.log(`[Sitemap] ${brand.name}: ${urls.length} product URLs found`);
+
+    // 2. Crawl individual product pages
+    const maxPages = config.maxPages || 50;
+    const toFetch = urls.slice(0, maxPages);
+    const products: ScrapedProduct[] = [];
+    const seen = new Set<string>();
+
+    for (const url of toFetch) {
+      try {
+        const product = await scrapeProductPage(url);
+        if (product && product.name && !seen.has(product.name)) {
+          seen.add(product.name);
+          products.push(product);
+        }
+      } catch { /* skip failed pages */ }
+    }
+
+    console.log(`[Sitemap] ${brand.name}: ${products.length} products extracted from ${toFetch.length} pages`);
+    return { brand_id: brand.id, products };
+  } catch (err: any) {
+    console.error(`[Sitemap] ${brand.name} error:`, err.message);
+    return { brand_id: brand.id, products: [], error: err.message };
+  }
+}
+
 // ── Product Block Splitting ────────────────────────────────
 
 function splitProducts(html: string, selector: string): string[] {
@@ -682,6 +805,11 @@ export async function scrapeBrand(
   brand: { id: number; name: string; website: string }
 ): Promise<ScrapeResult> {
   console.log(`[Scraper] Crawling ${brand.name} (${brand.website})...`);
+
+  // ── Sitemap-based strategies (more products, individual pages SSR) ──
+  if (SITEMAP_CONFIGS[brand.name.toLowerCase()]) {
+    return scrapeViaSitemap(brand);
+  }
 
   // ── API-based strategies (REST / JSON endpoints) ──────────
   if (brand.name.toLowerCase() === 'simucube') {
