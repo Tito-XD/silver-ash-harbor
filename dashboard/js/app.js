@@ -129,26 +129,57 @@ async function loadCrawlLogs() {
 
 async function triggerCrawl() {
   const btn = document.getElementById('btn-crawl');
-  const origText = btn.innerHTML;
-  btn.innerHTML = '<span class="spinner"></span> 爬取中...';
   btn.disabled = true;
 
+  // Create progress overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'crawl-progress';
+  overlay.innerHTML = `
+    <div class="crawl-progress-card">
+      <div class="crawl-progress-title">正在爬取...</div>
+      <div class="crawl-progress-brand" id="crawl-progress-brand">准备中</div>
+      <div class="crawl-progress-bar-track">
+        <div class="crawl-progress-bar-fill" id="crawl-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="crawl-progress-text" id="crawl-progress-text">0 / 5</div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const brands = state.brands;
+  let totalFound = 0, totalChanges = 0, completed = 0;
+
+  function updateProgress(brandName, done, total) {
+    document.getElementById('crawl-progress-brand').textContent = brandName;
+    document.getElementById('crawl-progress-fill').style.width = `${(done / total) * 100}%`;
+    document.getElementById('crawl-progress-text').textContent = `${done} / ${total}`;
+  }
+
   try {
-    const res = await api('/crawl', { method: 'POST' });
-    if (res.success) {
-      showToast(
-        `已爬取 ${res.data.brands_crawled} 个品牌，${res.data.products_found} 个产品，${res.data.price_changes} 处价格变动`,
-        'success'
-      );
-      await loadDashboard();
-      await loadCrawlLogs();
-    } else {
-      showToast(res.error || '爬取失败', 'error');
+    for (const brand of brands) {
+      updateProgress(brand.name, completed, brands.length);
+      try {
+        const res = await api(`/crawl/${brand.id}`, { method: 'POST' });
+        if (res.success && res.data) {
+          totalFound += res.data.products_found || 0;
+          totalChanges += res.data.price_changes || 0;
+        }
+      } catch { /* skip failed brand */ }
+      completed++;
     }
+
+    updateProgress('完成!', brands.length, brands.length);
+    await new Promise(r => setTimeout(r, 500)); // brief pause to show 100%
+
+    showToast(
+      `已爬取 ${brands.length} 个品牌，${totalFound} 个产品，${totalChanges} 处价格变动`,
+      'success'
+    );
+    await loadDashboard();
+    await loadCrawlLogs();
   } catch (err) {
     showToast('爬取失败: ' + err.message, 'error');
   } finally {
-    btn.innerHTML = origText;
+    overlay.remove();
     btn.disabled = false;
   }
 }
