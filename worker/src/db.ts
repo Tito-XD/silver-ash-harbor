@@ -132,6 +132,7 @@ export class PriceDB {
     price: number,
     currency: string,
     url?: string,
+    originalPrice?: number,
   ): Promise<{ productId: number; isNew: boolean; oldPrice: number | null }> {
     // Check if product exists
     const existing = await this.db.prepare(
@@ -143,14 +144,14 @@ export class PriceDB {
     if (existing) {
       const oldPrice = existing.current_price;
       await this.db.prepare(
-        'UPDATE products SET url = COALESCE(?, url), current_price = ?, currency = ?, last_crawled_at = ?, updated_at = ? WHERE id = ?'
-      ).bind(url || null, price, currency, now, now, existing.id).run();
+        'UPDATE products SET url = COALESCE(?, url), current_price = ?, original_price = ?, currency = ?, last_crawled_at = ?, updated_at = ? WHERE id = ?'
+      ).bind(url || null, price, originalPrice ?? null, currency, now, now, existing.id).run();
 
       return { productId: existing.id, isNew: false, oldPrice };
     } else {
       const { meta } = await this.db.prepare(
-        'INSERT INTO products (brand_id, name, url, currency, current_price, last_crawled_at) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(brandId, name, url || null, currency, price, now).run();
+        'INSERT INTO products (brand_id, name, url, currency, current_price, original_price, last_crawled_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(brandId, name, url || null, currency, price, originalPrice ?? null, now).run();
 
       return { productId: meta.last_row_id as number, isNew: true, oldPrice: null };
     }
@@ -253,6 +254,7 @@ export class PriceDB {
         sp.price,
         sp.currency,
         sp.url,
+        sp.original_price,
       );
       updated++;
 

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS products (
     sku             TEXT,
     currency        TEXT NOT NULL DEFAULT 'USD',
     current_price   REAL,
+    original_price  REAL,
     last_crawled_at TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),

@@ -19,6 +19,7 @@ export interface Product {
   sku: string | null;
   currency: string;
   current_price: number | null;
+  original_price: number | null;
   last_crawled_at: string | null;
   created_at: string;
   updated_at: string;
@@ -105,4 +106,5 @@ export interface ScrapedProduct {
   currency: string;
   url?: string;
   sku?: string;
+  original_price?: number;
 }

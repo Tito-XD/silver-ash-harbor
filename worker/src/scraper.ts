@@ -46,16 +46,23 @@ const BRAND_STRATEGIES: Record<string, (html: string, brand: { id: number; name:
     let lm: RegExpExecArray | null;
     while ((lm = linkRe.exec(html)) !== null) links.push({ url: lm[1], idx: lm.index });
 
-    // Find "Current price:" in sr-only spans
-    const priceRe = /Current price:\s*([$€£])\s*([\d,]+\.?\d{2})/gi;
-    const prices: { sym: string; val: number; idx: number }[] = [];
+    // Find "Current price:" and "Original price:" in sr-only spans
+    const priceRe = /(?:Current|Original) price:\s*([$€£])\s*([\d,]+\.?\d{2})/gi;
+    const currentPrices: { sym: string; val: number; idx: number }[] = [];
+    const originalPrices: { val: number; idx: number }[] = [];
     let pm: RegExpExecArray | null;
     while ((pm = priceRe.exec(html)) !== null) {
-      prices.push({ sym: pm[1], val: parseFloat(pm[2].replace(/,/g, '')), idx: pm.index });
+      const isCurrent = pm[0].startsWith('Current');
+      const val = parseFloat(pm[2].replace(/,/g, ''));
+      if (isCurrent) {
+        currentPrices.push({ sym: pm[1], val, idx: pm.index });
+      } else {
+        originalPrices.push({ val, idx: pm.index });
+      }
     }
 
-    // Match prices to closest preceding name
-    for (const p of prices) {
+    // Match current prices to closest preceding name
+    for (const p of currentPrices) {
       let bestName: typeof nameSources[0] | null = null;
       for (const n of nameSources) {
         if (n.idx < p.idx && (!bestName || n.idx > bestName.idx)) bestName = n;
@@ -67,9 +74,20 @@ const BRAND_STRATEGIES: Record<string, (html: string, brand: { id: number; name:
         if (l.idx < p.idx && (!bestLink || l.idx > bestLink.idx)) bestLink = l;
       }
 
+      // Find original price near this product (±600 chars of the name)
+      let orig: number | undefined;
+      const namePos = bestName.idx;
+      for (const o of originalPrices) {
+        if (Math.abs(o.idx - namePos) < 600) {
+          orig = o.val;
+          break;
+        }
+      }
+
       seen.add(bestName.name);
       const cur = p.sym === '€' ? 'EUR' : p.sym === '£' ? 'GBP' : 'USD';
       const prod: ScrapedProduct = { name: bestName.name, price: p.val, currency: cur };
+      if (orig && orig > p.val) prod.original_price = orig;
       if (bestLink) {
         prod.url = bestLink.url.startsWith('http') ? bestLink.url : `https://www.fanatec.com${bestLink.url}`;
       }
@@ -717,14 +735,32 @@ function getConfig(html: string, brand: { id: number; name: string; website: str
 async function scrapeSimucubeApi(
   brand: { id: number; name: string; website: string }
 ): Promise<ScrapeResult> {
-  const BASE = 'https://simucube.com/wp-json/wc/store/v1/products';
+  return scrapeWcStoreApi(brand, 'https://simucube.com/wp-json/wc/store/v1/products');
+}
+
+/**
+ * Asetek SimSports — WooCommerce Store API.
+ */
+async function scrapeAsetekApi(
+  brand: { id: number; name: string; website: string }
+): Promise<ScrapeResult> {
+  return scrapeWcStoreApi(brand, 'https://www.asetek.com/simsports/wp-json/wc/store/v1/products');
+}
+
+/**
+ * Generic WooCommerce Store API scraper.
+ * Returns products with current price, original (regular) price, and URL.
+ */
+async function scrapeWcStoreApi(
+  brand: { id: number; name: string; website: string },
+  apiBase: string,
+): Promise<ScrapeResult> {
   const allProducts: ScrapedProduct[] = [];
   const seen = new Set<string>();
 
   try {
-    // Fetch all pages (100 per page)
-    for (let page = 1; page <= 5; page++) {
-      const url = `${BASE}?per_page=100&page=${page}`;
+    for (let page = 1; page <= 3; page++) {
+      const url = `${apiBase}?per_page=100&page=${page}`;
       const resp = await fetch(url, {
         headers: { 'Accept': 'application/json', 'User-Agent': 'PriceTracker/1.0' },
       });
@@ -737,29 +773,36 @@ async function scrapeSimucubeApi(
         const name = (p.name || '').trim();
         if (!name || seen.has(name)) continue;
 
-        const priceCents = parseFloat(p.prices?.price || '0');
-        const currency = p.prices?.currency_code || 'EUR';
+        const prices = p.prices || {};
+        const priceCents = parseFloat(prices.price || '0');
+        const regularCents = parseFloat(prices.regular_price || '0');
+        const currency = prices.currency_code || 'EUR';
         const priceInUnit = currency === 'JPY' ? priceCents : priceCents / 100;
+        const regularInUnit = currency === 'JPY' ? regularCents : regularCents / 100;
 
         if (priceInUnit > 0) {
           seen.add(name);
-          allProducts.push({
+          const prod: ScrapedProduct = {
             name,
             price: priceInUnit,
             currency,
             url: p.permalink || undefined,
-          });
+          };
+          // Include original price if on sale
+          if (regularInUnit > priceInUnit) {
+            prod.original_price = regularInUnit;
+          }
+          allProducts.push(prod);
         }
       }
 
-      // If this page had fewer than 100 items, we're done
       if (data.length < 100) break;
     }
 
-    console.log(`[Scraper] ${brand.name} (API): found ${allProducts.length} products`);
+    console.log(`[Scraper] ${brand.name} (WC API): found ${allProducts.length} products`);
     return { brand_id: brand.id, products: allProducts };
   } catch (err: any) {
-    console.error(`[Scraper] ${brand.name} API error:`, err.message);
+    console.error(`[Scraper] ${brand.name} WC API error:`, err.message);
     return { brand_id: brand.id, products: [], error: err.message };
   }
 }
@@ -814,6 +857,9 @@ export async function scrapeBrand(
   // ── API-based strategies (REST / JSON endpoints) ──────────
   if (brand.name.toLowerCase() === 'simucube') {
     return scrapeSimucubeApi(brand);
+  }
+  if (brand.name.toLowerCase() === 'asetek') {
+    return scrapeAsetekApi(brand);
   }
 
   try {

@@ -362,7 +362,14 @@ function getPriceHtml(p) {
   const cls = p.change_direction === 'up' ? 'price-up'
     : p.change_direction === 'down' ? 'price-down'
     : 'price';
-  return `<span class="price ${cls}">${formatPrice(p.current_price, p.currency)}</span>`;
+  let html = `<span class="price ${cls}">${formatPrice(p.current_price, p.currency)}</span>`;
+  // Show original price with strikethrough if on sale
+  if (p.original_price && p.original_price > p.current_price) {
+    html += ` <span class="price-original">${formatPrice(p.original_price, p.currency)}</span>`;
+    const discount = Math.round((1 - p.current_price / p.original_price) * 100);
+    html += ` <span class="price-discount">-${discount}%</span>`;
+  }
+  return html;
 }
 
 function getChangeHtml(p) {

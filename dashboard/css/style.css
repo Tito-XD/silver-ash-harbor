@@ -119,6 +119,11 @@ body {
   box-shadow: var(--shadow);
   text-align: center;
   transition: transform .15s, box-shadow .15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 130px;
 }
 
 .card:hover {
@@ -129,28 +134,33 @@ body {
 .card-icon {
   font-size: 1.8rem;
   margin-bottom: 8px;
+  height: 32px;
+  line-height: 32px;
 }
 
 .card-brand-logos {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
+  height: 32px;
+  align-items: center;
 }
 
 .card-brand-logos img {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
 }
 
 .card-value {
   font-size: 1.6rem;
   font-weight: 700;
   color: var(--text);
+  height: 36px;
+  line-height: 36px;
 }
 
 .card-value.pulse {
@@ -166,6 +176,8 @@ body {
   font-size: 0.8rem;
   color: var(--text-secondary);
   margin-top: 4px;
+  height: 20px;
+  line-height: 20px;
 }
 
 /* ── Tabs ────────────────────────────────────────────────── */
@@ -332,6 +344,26 @@ tbody tr:last-child td {
 .price-up { color: var(--up-color); }
 .price-down { color: var(--down-color); }
 .price-unchanged { color: var(--text-secondary); }
+
+.price-original {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.85em;
+  margin-left: 6px;
+}
+
+.price-discount {
+  display: inline-block;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
 
 .change-badge {
   display: inline-flex;
