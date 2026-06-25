@@ -65,6 +65,19 @@ function setupEventListeners() {
     renderTable();
   });
 
+  // Product row click → price history
+  document.getElementById('product-table').addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-product-id]');
+    if (!row) return;
+    showPriceHistory(parseInt(row.dataset.productId), row.dataset.productName, row.dataset.productCurrency);
+  });
+
+  // Modal close
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('price-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
   // Delegate tab clicks
   document.getElementById('brand-tabs').addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
@@ -342,10 +355,11 @@ function renderTable() {
       : '<span class="time-cell">—</span>';
 
     return `
-      <tr>
+      <tr class="product-row" data-product-id="${p.id}" data-product-name="${escapeHtml(p.name)}" data-product-currency="${p.currency}">
         <td>
           <span class="product-name">
-            ${p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.name)}</a>` : escapeHtml(p.name)}
+            ${escapeHtml(p.name)}
+            ${p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="打开官网">&#8599;</a>` : ''}
           </span>
         </td>
         <td>${brandBadge(brandName)}</td>
@@ -424,7 +438,86 @@ function renderCrawlLogs(logs) {
   `).join('\n');
 }
 
-// ── Helpers ────────────────────────────────────────────────
+// ── Price History Modal ───────────────────────────────────
+
+async function showPriceHistory(productId, productName, currency) {
+  const modal = document.getElementById('price-modal');
+  document.getElementById('modal-product-name').textContent = productName;
+  document.getElementById('modal-body').innerHTML = '<div class="history-loading">加载中...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await api(`/products/${productId}/history`);
+    if (res.success && res.data) {
+      renderPriceHistory(res.data, currency);
+    } else {
+      document.getElementById('modal-body').innerHTML = '<div class="history-loading">暂无历史数据</div>';
+    }
+  } catch {
+    document.getElementById('modal-body').innerHTML = '<div class="history-loading">加载失败</div>';
+  }
+}
+
+function renderPriceHistory(history, currency) {
+  if (history.length === 0) {
+    document.getElementById('modal-body').innerHTML = '<div class="history-loading">暂无历史数据</div>';
+    return;
+  }
+
+  // Build a mini chart with price dots
+  const prices = history.map(h => h.price);
+  const min = Math.min(...prices) * 0.95;
+  const max = Math.max(...prices) * 1.05;
+  const range = max - min || 1;
+
+  const chartHtml = history.length > 1 ? `
+    <div class="history-chart" id="history-chart">
+      ${history.toReversed().map((h, i) => {
+        const x = (i / (history.length - 1)) * 100;
+        const y = 100 - ((h.price - min) / range) * 100;
+        return `<div class="chart-dot" style="left:${x}%;top:${y}%" title="${formatPrice(h.price, currency)}"></div>`;
+      }).join('')}
+      <svg class="chart-line" preserveAspectRatio="none" viewBox="0 0 ${Math.max(history.length - 1, 1) * 20} 60">
+        <polyline fill="none" stroke="var(--primary)" stroke-width="2" points="${
+          history.toReversed().map((h, i) => {
+            const x = (i / Math.max(history.length - 1, 1)) * (Math.max(history.length - 1, 1) * 20);
+            const y = 60 - ((h.price - min) / range) * 50;
+            return `${x},${y}`;
+          }).join(' ')
+        }"/>
+      </svg>
+    </div>` : '';
+
+  // Build table
+  const prevPrices = [...history].reverse();
+  const rows = prevPrices.map((h, i) => {
+    const prev = i > 0 ? prevPrices[i - 1].price : h.price;
+    const diff = h.price - prev;
+    const diffHtml = i === 0 ? '<span style="color:var(--text-secondary)">首次</span>'
+      : diff > 0 ? `<span style="color:var(--up-color)">&#9650; +${formatPrice(diff, currency)}</span>`
+      : diff < 0 ? `<span style="color:var(--down-color)">&#9660; ${formatPrice(diff, currency)}</span>`
+      : '<span style="color:var(--text-secondary)">—</span>';
+
+    return `<tr>
+      <td>${formatTime(h.crawled_at)}</td>
+      <td><strong>${formatPrice(h.price, currency)}</strong></td>
+      <td>${diffHtml}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    ${chartHtml}
+    <div class="history-table-wrap">
+      <table class="history-table">
+        <thead><tr><th>日期</th><th>价格</th><th>变动</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function closeModal() {
+  document.getElementById('price-modal').style.display = 'none';
+}
 
 function formatPrice(price, currency = 'USD') {
   const symbols = { USD: '$', EUR: '€', GBP: '£', JPY: '¥' };

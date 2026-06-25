@@ -163,6 +163,13 @@ export class PriceDB {
     ).bind(productId, price).run();
   }
 
+  async getPriceHistory(productId: number): Promise<PriceHistory[]> {
+    const { results } = await this.db.prepare(
+      'SELECT id, product_id, price, crawled_at FROM price_history WHERE product_id = ? ORDER BY crawled_at DESC LIMIT 60'
+    ).bind(productId).all<PriceHistory>();
+    return results;
+  }
+
   // ── Crawl Log ────────────────────────────────────────────
 
   async startCrawlLog(brandId: number): Promise<number> {

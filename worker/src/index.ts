@@ -83,6 +83,13 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
     return json<ProductWithChange[]>({ success: true, data: products });
   }
 
+  // GET /api/products/:id/history — price history for a product
+  if (path.match(/^\/api\/products\/\d+\/history$/) && req.method === 'GET') {
+    const productId = parseInt(path.split('/')[3]);
+    const history = await db.getPriceHistory(productId);
+    return json({ success: true, data: history });
+  }
+
   // GET /api/products — all products (with changes)
   if (path === '/api/products' && req.method === 'GET') {
     const products = await db.getAllProducts();
