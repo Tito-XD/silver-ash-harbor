@@ -172,10 +172,16 @@ async function triggerCrawl() {
       return `<span class="cb-item cb-pending"><img src="${src}" alt="${b.name}" width="18" height="18" ${onerr}><span>${b.name}</span></span>`;
     }).join('');
 
-    // Show product names scrolling
+    // Show product names one at a time, cycling
     if (productNames.length > 0) {
-      const names = productNames.slice(0, 12).map(n => `<span>${escapeHtml(n)}</span>`).join('  ·  ');
-      productsEl.innerHTML = `<div class="cp-products-scroll">${names}</div>`;
+      productsEl.innerHTML = `<span class="cp-product-name">${escapeHtml(productNames[0])}</span>`;
+      let idx = 0;
+      const interval = setInterval(() => {
+        idx = (idx + 1) % productNames.length;
+        productsEl.innerHTML = `<span class="cp-product-name">${escapeHtml(productNames[idx])}</span>`;
+      }, 180);
+      // Store interval so we can clear later
+      productsEl._interval = interval;
     }
   }
 
@@ -203,6 +209,7 @@ async function triggerCrawl() {
       await new Promise(r => setTimeout(r, 800)); // brief pause to show products
     }
 
+    if (productsEl._interval) clearInterval(productsEl._interval);
     document.getElementById('crawl-progress-text').textContent = '完成!';
     productsEl.innerHTML = '';
     await new Promise(r => setTimeout(r, 500));
