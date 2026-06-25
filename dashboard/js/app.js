@@ -172,16 +172,9 @@ async function triggerCrawl() {
       return `<span class="cb-item cb-pending"><img src="${src}" alt="${b.name}" width="18" height="18" ${onerr}><span>${b.name}</span></span>`;
     }).join('');
 
-    // Show product names one at a time, cycling
+    // Show product count for the just-completed brand
     if (productNames.length > 0) {
-      productsEl.innerHTML = `<span class="cp-product-name">${escapeHtml(productNames[0])}</span>`;
-      let idx = 0;
-      const interval = setInterval(() => {
-        idx = (idx + 1) % productNames.length;
-        productsEl.innerHTML = `<span class="cp-product-name">${escapeHtml(productNames[idx])}</span>`;
-      }, 180);
-      // Store interval so we can clear later
-      productsEl._interval = interval;
+      productsEl.innerHTML = `<span class="cp-product-name">发现 ${productNames.length} 个产品</span>`;
     }
   }
 
@@ -206,10 +199,9 @@ async function triggerCrawl() {
 
       completed++;
       updateProgress(brand.name, completed, brands.length, productNames);
-      await new Promise(r => setTimeout(r, 800)); // brief pause to show products
+      await new Promise(r => setTimeout(r, 300));
     }
 
-    if (productsEl._interval) clearInterval(productsEl._interval);
     document.getElementById('crawl-progress-text').textContent = '完成!';
     productsEl.innerHTML = '';
     await new Promise(r => setTimeout(r, 500));
