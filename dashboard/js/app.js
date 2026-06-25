@@ -6,7 +6,7 @@ const API_BASE = '/api';
 
 // Brand config with domain for favicon lookup
 const BRAND_CONFIG = {
-  Fanatec:  { color: '#1a1a1a', domain: 'www.fanatec.com' },
+  Fanatec:  { color: '#1a1a1a', logo: 'https://assets.fanatec.com/image/upload/v1771889128/pages/brand/fanatec-signet-black.svg' },
   Simagic:  { color: '#0052cc', domain: 'simagic.com', fallbackDomain: 'simagic.com' },
   Logitech: { color: '#00b8fc', domain: 'www.logitechg.com' },
   Simucube: { color: '#ff6a00', domain: 'simucube.com' },
@@ -15,9 +15,11 @@ const BRAND_CONFIG = {
 
 function brandLogoUrl(name) {
   const cfg = BRAND_CONFIG[name];
-  if (!cfg || !cfg.domain) return '';
-  // Primary: our proxy (may fail for CF-blocked sites)
-  return `/api/favicon?domain=${cfg.domain}`;
+  if (!cfg) return '';
+  // Direct logo URL takes priority
+  if (cfg.logo) return cfg.logo;
+  if (cfg.domain) return `/api/favicon?domain=${cfg.domain}`;
+  return '';
 }
 
 function brandLogoFallback(name) {
