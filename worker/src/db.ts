@@ -217,7 +217,9 @@ export class PriceDB {
         b.name,
         COUNT(p.id) AS product_count,
         COALESCE(MAX(p.last_crawled_at), MAX(cl.finished_at)) AS last_crawled_at,
-        COALESCE(SUM(CASE WHEN cl.finished_at > datetime('now', '-1 day') THEN cl.price_changes ELSE 0 END), 0) AS price_changes
+        COALESCE((SELECT SUM(cl2.price_changes) FROM crawl_log cl2 WHERE cl2.brand_id = b.id AND cl2.finished_at = (
+          SELECT MAX(cl3.finished_at) FROM crawl_log cl3 WHERE cl3.brand_id = b.id AND cl3.status = 'success'
+        )), 0) AS price_changes
       FROM brands b
       LEFT JOIN products p ON b.id = p.brand_id
       LEFT JOIN crawl_log cl ON b.id = cl.brand_id
