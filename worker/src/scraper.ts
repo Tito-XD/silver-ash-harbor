@@ -770,16 +770,16 @@ function getConfig(html: string, brand: { id: number; name: string; website: str
 async function scrapeSimucubeApi(
   brand: { id: number; name: string; website: string }
 ): Promise<ScrapeResult> {
-  return scrapeWcStoreApi(brand, 'https://simucube.com/wp-json/wc/store/v1/products');
+  return scrapeWcStoreApi(brand, 'https://simucube.com/en-us/wp-json/wc/store/v1/products');
 }
 
 /**
- * Asetek SimSports — WooCommerce Store API.
+ * Asetek SimSports — WooCommerce Store API (US webshop).
  */
 async function scrapeAsetekApi(
   brand: { id: number; name: string; website: string }
 ): Promise<ScrapeResult> {
-  return scrapeWcStoreApi(brand, 'https://www.asetek.com/simsports/wp-json/wc/store/v1/products');
+  return scrapeWcStoreApi(brand, 'https://www.asetek.com/simsports/us/wp-json/wc/store/v1/products');
 }
 
 /**
@@ -792,9 +792,6 @@ async function scrapeWcStoreApi(
 ): Promise<ScrapeResult> {
   const allProducts: ScrapedProduct[] = [];
   const seen = new Set<string>();
-
-  // Get exchange rates for EUR/GBP → USD conversion
-  const rates = await getUsdRates();
 
   try {
     for (let page = 1; page <= 3; page++) {
@@ -814,25 +811,20 @@ async function scrapeWcStoreApi(
         const prices = p.prices || {};
         const priceCents = parseFloat(prices.price || '0');
         const regularCents = parseFloat(prices.regular_price || '0');
-        const currency = prices.currency_code || 'EUR';
-        const rawPrice = currency === 'JPY' ? priceCents : priceCents / 100;
-        const rawRegular = currency === 'JPY' ? regularCents : regularCents / 100;
+        const currency = prices.currency_code || 'USD';
+        const priceInUnit = currency === 'JPY' ? priceCents : priceCents / 100;
+        const regularInUnit = currency === 'JPY' ? regularCents : regularCents / 100;
 
-        // Convert to USD for consistent comparison
-        const { usd } = convertToUsd(rawPrice, currency, rates);
-
-        if (usd > 0) {
+        if (priceInUnit > 0) {
           seen.add(name);
           const prod: ScrapedProduct = {
             name,
-            price: usd,       // USD price
-            currency: 'USD',  // always store as USD
+            price: priceInUnit,
+            currency,
             url: p.permalink || undefined,
           };
-          // Original price converted to USD for comparison
-          if (rawRegular > rawPrice) {
-            const origUsd = convertToUsd(rawRegular, currency, rates).usd;
-            prod.original_price = origUsd;
+          if (regularInUnit > priceInUnit) {
+            prod.original_price = regularInUnit;
           }
           allProducts.push(prod);
         }
