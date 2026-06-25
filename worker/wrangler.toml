@@ -14,10 +14,10 @@ binding = "DB"
 database_name = "price-db"
 database_id = "2b6afc79-389c-4fa5-a9ab-0bfd684f8a53"  # Fill after `wrangler d1 create price-db`
 
-# Cron trigger - daily crawl at 2:00 UTC (10:00 AM Beijing)
+# Cron trigger - daily crawl at 0:30 UTC (8:30 AM Beijing)
 [triggers]
-crons = ["0 2 * * *"]
+crons = ["30 0 * * *"]
 
 [env.production]
 [env.production.triggers]
-crons = ["0 2 * * *"]
+crons = ["30 0 * * *"]
