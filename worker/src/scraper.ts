@@ -6,6 +6,41 @@
 
 import { BrandConfig, ScrapedProduct, ScrapeResult } from './types';
 
+// ── Exchange Rate ──────────────────────────────────────────
+
+let cachedUsdRate: { eurToUsd: number; gbpToUsd: number; fetchedAt: number } | null = null;
+
+async function getUsdRates(): Promise<{ eurToUsd: number; gbpToUsd: number }> {
+  // Use cached rates for 6 hours
+  if (cachedUsdRate && Date.now() - cachedUsdRate.fetchedAt < 6 * 3600_000) {
+    return { eurToUsd: cachedUsdRate.eurToUsd, gbpToUsd: cachedUsdRate.gbpToUsd };
+  }
+
+  const defaults = { eurToUsd: 1.10, gbpToUsd: 1.26 };
+  try {
+    const resp = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD,GBP');
+    if (resp.ok) {
+      const data: any = await resp.json();
+      const eurToUsd = data.rates?.USD || defaults.eurToUsd;
+      const gbpToUsd = eurToUsd / (data.rates?.GBP || 1);
+      cachedUsdRate = { eurToUsd, gbpToUsd, fetchedAt: Date.now() };
+      console.log(`[Scraper] Exchange rates: EUR→USD=${eurToUsd.toFixed(4)}, GBP→USD=${gbpToUsd.toFixed(4)}`);
+      return { eurToUsd, gbpToUsd };
+    }
+  } catch { /* use defaults */ }
+  return defaults;
+}
+
+function convertToUsd(price: number, currency: string, rates: { eurToUsd: number; gbpToUsd: number }): { usd: number; native: number; nativeCurrency: string } {
+  if (currency === 'EUR') {
+    return { usd: Math.round(price * rates.eurToUsd * 100) / 100, native: price, nativeCurrency: 'EUR' };
+  }
+  if (currency === 'GBP') {
+    return { usd: Math.round(price * rates.gbpToUsd * 100) / 100, native: price, nativeCurrency: 'GBP' };
+  }
+  return { usd: price, native: price, nativeCurrency: currency };
+}
+
 /**
  * Per-brand scraping strategies.
  * Keyed by lowercase brand name for exact-match lookups.
@@ -758,6 +793,9 @@ async function scrapeWcStoreApi(
   const allProducts: ScrapedProduct[] = [];
   const seen = new Set<string>();
 
+  // Get exchange rates for EUR/GBP → USD conversion
+  const rates = await getUsdRates();
+
   try {
     for (let page = 1; page <= 3; page++) {
       const url = `${apiBase}?per_page=100&page=${page}`;
@@ -777,20 +815,24 @@ async function scrapeWcStoreApi(
         const priceCents = parseFloat(prices.price || '0');
         const regularCents = parseFloat(prices.regular_price || '0');
         const currency = prices.currency_code || 'EUR';
-        const priceInUnit = currency === 'JPY' ? priceCents : priceCents / 100;
-        const regularInUnit = currency === 'JPY' ? regularCents : regularCents / 100;
+        const rawPrice = currency === 'JPY' ? priceCents : priceCents / 100;
+        const rawRegular = currency === 'JPY' ? regularCents : regularCents / 100;
 
-        if (priceInUnit > 0) {
+        // Convert to USD for consistent comparison
+        const { usd } = convertToUsd(rawPrice, currency, rates);
+
+        if (usd > 0) {
           seen.add(name);
           const prod: ScrapedProduct = {
             name,
-            price: priceInUnit,
-            currency,
+            price: usd,       // USD price
+            currency: 'USD',  // always store as USD
             url: p.permalink || undefined,
           };
-          // Include original price if on sale
-          if (regularInUnit > priceInUnit) {
-            prod.original_price = regularInUnit;
+          // Original price converted to USD for comparison
+          if (rawRegular > rawPrice) {
+            const origUsd = convertToUsd(rawRegular, currency, rates).usd;
+            prod.original_price = origUsd;
           }
           allProducts.push(prod);
         }
